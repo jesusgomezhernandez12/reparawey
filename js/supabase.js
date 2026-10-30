@@ -1,5 +1,3 @@
-import { createClient } from "https://cdn.skypack.dev/@supabase/supabase-js@2";
-
 const supabaseUrl = "https://TU_PROYECTO.supabase.co";
 const supabaseKey = "TU_CLAVE_ANONIMA";
 
@@ -8,8 +6,16 @@ const isConfigured =
   supabaseKey !== "TU_CLAVE_ANONIMA";
 
 export const supabase = isConfigured
-  ? createClient(supabaseUrl, supabaseKey)
+  ? null
   : createMockClient();
+
+export async function getSupabase() {
+  if (isConfigured) {
+    const { createClient } = await import("https://cdn.skypack.dev/@supabase/supabase-js@2");
+    return createClient(supabaseUrl, supabaseKey);
+  }
+  return createMockClient();
+}
 
 function createMockClient() {
   const chain = {

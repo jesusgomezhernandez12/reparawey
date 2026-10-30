@@ -4,13 +4,21 @@
   "description": "Sistema de gestión de reparaciones de celulares",
   "scripts": {
     "test": "node test-frontend.js",
-    "test:debug": "node debug-test.js",
-    "serve": "npx serve -l 8080"
+    "serve": "serve -s . -l 8080",
+    "dev": "serve -s . -l 8080"
   },
-  "keywords": ["reparaciones", "celulares", "supabase", "vercel"],
+  "keywords": [
+    "reparaciones",
+    "celulares",
+    "supabase",
+    "vercel"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "jsdom": "^29.1.1"
+  },
+  "devDependencies": {
+    "serve": "^14.2.6"
   }
 }

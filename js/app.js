@@ -1,71 +1,142 @@
 import { supabase } from "./supabase.js";
 
-const state = {
+const STORAGE_KEY = "reparawey-state";
+
+const initialState = {
   clients: [],
   devices: [],
   repairs: [],
   parts: [],
   tools: [],
-  brokenParts: {},
-  usedParts: {},
-  usedTools: {},
-  additionalCosts: {},
 };
 
+const state = { ...initialState };
+
+let currentPage = "dashboard";
+
 const $ = (id) => document.getElementById(id);
-const views = ["dashboard", "clients", "devices", "repairs", "parts", "tools"];
+
+const SIDEBAR_HTML = `
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <h2>ReparaWey</h2>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="index.html" class="nav-link" data-page="dashboard"><span>Dashboard</span></a>
+      <a href="clients.html" class="nav-link" data-page="clients"><span>Clientes</span></a>
+      <a href="devices.html" class="nav-link" data-page="devices"><span>Dispositivos</span></a>
+      <a href="repairs.html" class="nav-link" data-page="repairs"><span>Reparaciones</span></a>
+      <a href="parts.html" class="nav-link" data-page="parts"><span>Inventario Piezas</span></a>
+      <a href="tools.html" class="nav-link" data-page="tools"><span>Inventario Implementos</span></a>
+    </nav>
+  </aside>
+`;
 
 function init() {
-  setupNavigation();
+  loadState();
+  const page = document.body?.dataset.page || "dashboard";
+  currentPage = page;
+  injectSidebar();
+  setActiveNavLink();
   setupGlobalListeners();
-  renderAll();
   seedSampleData();
+  initPage(page);
 }
 
-function setupNavigation() {
-  document.querySelectorAll("[data-view]").forEach((link) => {
-    link.addEventListener("click", (e) => {
-      e.preventDefault();
-      const view = e.currentTarget.dataset.view;
-      switchView(view);
-    });
-  });
+function injectSidebar() {
+  const app = $("app");
+  if (app) app.insertAdjacentHTML("afterbegin", SIDEBAR_HTML);
+}
 
-  $("btn-add-client").addEventListener("click", () => openModal("client"));
-  $("btn-add-device").addEventListener("click", () => openModal("device"));
-  $("btn-add-repair").addEventListener("click", () => openModal("repair"));
-  $("btn-add-part").addEventListener("click", () => openModal("part"));
-  $("btn-add-tool").addEventListener("click", () => openModal("tool"));
+function setActiveNavLink() {
+  document.querySelectorAll(".sidebar-nav .nav-link").forEach((link) => {
+    link.classList.toggle("active", link.dataset.page === currentPage);
+  });
 }
 
 function setupGlobalListeners() {
-  $("modal-close").addEventListener("click", closeModal);
-  $("modal-overlay").addEventListener("click", (e) => {
-    if (e.target === e.currentTarget) closeModal();
-  });
+  const closeEl = $("modal-close");
+  const overlayEl = $("modal-overlay");
+  if (closeEl) closeEl.addEventListener("click", closeModal);
+  if (overlayEl) {
+    overlayEl.addEventListener("click", (e) => {
+      if (e.target === e.currentTarget) closeModal();
+    });
+  }
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && $("modal-overlay").classList.contains("active")) {
+    if (e.key === "Escape" && overlayEl?.classList.contains("active")) {
       closeModal();
     }
   });
 }
 
-function switchView(viewName) {
-  document.querySelectorAll(".nav-link").forEach((link) => {
-    link.classList.toggle("active", link.dataset.view === viewName);
-  });
-  views.forEach((v) => {
-    $(`view-${v}`).classList.toggle("active", v === viewName);
-  });
+function initPage(page) {
+  switch (page) {
+    case "dashboard":
+      setupDashboardPage();
+      break;
+    case "clients":
+      setupClientsPage();
+      break;
+    case "devices":
+      setupDevicesPage();
+      break;
+    case "repairs":
+      setupRepairsPage();
+      break;
+    case "parts":
+      setupPartsPage();
+      break;
+    case "tools":
+      setupToolsPage();
+      break;
+  }
 }
 
+function setupDashboardPage() {
+  renderDashboard();
+}
+
+function setupClientsPage() {
+  renderClients();
+  const btn = $("btn-add-client");
+  if (btn) btn.addEventListener("click", () => openModal("client"));
+}
+
+function setupDevicesPage() {
+  renderDevices();
+  const btn = $("btn-add-device");
+  if (btn) btn.addEventListener("click", () => openModal("device"));
+}
+
+function setupRepairsPage() {
+  renderRepairs();
+  const btn = $("btn-add-repair");
+  if (btn) btn.addEventListener("click", () => openModal("repair"));
+}
+
+function setupPartsPage() {
+  renderParts();
+  const btn = $("btn-add-part");
+  if (btn) btn.addEventListener("click", () => openModal("part"));
+}
+
+function setupToolsPage() {
+  renderTools();
+  const btn = $("btn-add-tool");
+  if (btn) btn.addEventListener("click", () => openModal("tool"));
+}
+
+/* ===== Modal ===== */
+
 function openModal(type, data) {
+  data = data || null;
   const title = {
-    client: data && data.id ? "Editar Cliente" : "Nuevo Cliente",
-    device: data && data.id ? "Editar Dispositivo" : "Nuevo Dispositivo",
-    repair: data && data.id ? "Editar Reparación" : "Nueva Reparación",
-    part: data && data.id ? "Editar Pieza" : "Nueva Pieza",
-    tool: data && data.id ? "Editar Implemento" : "Nuevo Implemento",
+    client: data ? "Editar Cliente" : "Nuevo Cliente",
+    device: data ? "Editar Dispositivo" : "Nuevo Dispositivo",
+    repair: data ? "Editar Reparación" : "Nueva Reparación",
+    part: data ? "Editar Pieza" : "Nueva Pieza",
+    tool: data ? "Editar Implemento" : "Nuevo Implemento",
   };
   $("modal-title").textContent = title[type] || "";
   $("modal-body").innerHTML = "";
@@ -76,16 +147,17 @@ function openModal(type, data) {
 }
 
 function closeModal() {
-  $("modal-overlay").classList.remove("active");
+  const el = $("modal-overlay");
+  if (el) el.classList.remove("active");
 }
 
 /* ===== Form Builders ===== */
 
 function buildForm(type, data) {
+  data = data || {};
   const form = document.createElement("form");
   form.className = "modal-form";
   form.dataset.type = type;
-  data = data || {};
   if (data.id) form.dataset.id = data.id;
 
   switch (type) {
@@ -109,38 +181,38 @@ function buildForm(type, data) {
   form.innerHTML += `
     <div class="form-actions">
       <button type="button" class="btn btn-outline" onclick="window.closeModal()">Cancelar</button>
-      <button type="submit" class="btn btn-primary">${data ? "Actualizar" : "Guardar"}</button>
+      <button type="submit" class="btn btn-primary">${data.id ? "Actualizar" : "Guardar"}</button>
     </div>
   `;
 
   form.addEventListener("submit", (e) => {
     e.preventDefault();
-    handleFormSubmit(type, form, data);
+    handleFormSubmit(type, form, data.id ? data : null);
   });
 
   return form;
 }
 
-function clientFormHTML(data = {}) {
+function clientFormHTML(data) {
   return `
     <div class="form-grid">
       <div class="form-group form-group-full">
         <label class="form-label">Nombre</label>
-        <input type="text" name="name" class="form-input" value="${data.name || ""}" required />
+        <input type="text" name="name" class="form-input" value="${data?.name || ""}" required />
       </div>
       <div class="form-group">
         <label class="form-label">Teléfono</label>
-        <input type="tel" name="phone" class="form-input" value="${data.phone || ""}" required />
+        <input type="tel" name="phone" class="form-input" value="${data?.phone || ""}" required />
       </div>
       <div class="form-group">
         <label class="form-label">Email</label>
-        <input type="email" name="email" class="form-input" value="${data.email || ""}" />
+        <input type="email" name="email" class="form-input" value="${data?.email || ""}" />
       </div>
     </div>
   `;
 }
 
-function deviceFormHTML(data = {}) {
+function deviceFormHTML(data) {
   const clientOptions = state.clients
     .map((c) => `<option value="${c.id}">${c.name} (${c.phone})</option>`)
     .join("");
@@ -152,29 +224,29 @@ function deviceFormHTML(data = {}) {
       </div>
       <div class="form-group">
         <label class="form-label">Marca</label>
-        <input type="text" name="brand" class="form-input" value="${data.brand || ""}" required />
+        <input type="text" name="brand" class="form-input" value="${data?.brand || ""}" required />
       </div>
       <div class="form-group">
         <label class="form-label">Modelo</label>
-        <input type="text" name="model" class="form-input" value="${data.model || ""}" required />
+        <input type="text" name="model" class="form-input" value="${data?.model || ""}" required />
       </div>
       <div class="form-group">
         <label class="form-label">IMEI</label>
-        <input type="text" name="imei" class="form-input" value="${data.imei || ""}" />
+        <input type="text" name="imei" class="form-input" value="${data?.imei || ""}" />
       </div>
       <div class="form-group">
         <label class="form-label">Color</label>
-        <input type="text" name="color" class="form-input" value="${data.color || ""}" />
+        <input type="text" name="color" class="form-input" value="${data?.color || ""}" />
       </div>
       <div class="form-group form-group-full">
         <label class="form-label">Nota</label>
-        <textarea name="note" class="form-input form-textarea" placeholder="Observaciones adicionales..." />${data.note || ""}</textarea>
+        <textarea name="note" class="form-input form-textarea" placeholder="Observaciones adicionales...">${data?.note || ""}</textarea>
       </div>
     </div>
   `;
 }
 
-function repairFormHTML(data = {}) {
+function repairFormHTML(data) {
   const deviceOptions = state.devices
     .map((d) => {
       const client = state.clients.find((c) => c.id === d.client_id) || {};
@@ -193,7 +265,7 @@ function repairFormHTML(data = {}) {
   const statusOptions = ["pending", "in_progress", "completed", "cancelled"]
     .map(
       (s) =>
-        `<option value="${s}" ${data.status === s ? "selected" : ""}>${formatStatus(s)}</option>`
+        `<option value="${s}" ${data?.status === s ? "selected" : ""}>${formatStatus(s)}</option>`
     )
     .join("");
 
@@ -209,11 +281,11 @@ function repairFormHTML(data = {}) {
       </div>
       <div class="form-group form-group-full">
         <label class="form-label">Diagnóstico</label>
-        <textarea name="diagnosis" class="form-input form-textarea" placeholder="Describe el problema..." required>${data.diagnosis || ""}</textarea>
+        <textarea name="diagnosis" class="form-input form-textarea" placeholder="Describe el problema..." required>${data?.diagnosis || ""}</textarea>
       </div>
       <div class="form-group form-group-full">
         <label class="form-label">Notas</label>
-        <textarea name="notes" class="form-input form-textarea" placeholder="Notas adicionales...">${data.notes || ""}</textarea>
+        <textarea name="notes" class="form-input form-textarea" placeholder="Notas adicionales...">${data?.notes || ""}</textarea>
       </div>
     </div>
 
@@ -256,35 +328,35 @@ function repairFormHTML(data = {}) {
   `;
 }
 
-function partFormHTML(data = {}) {
+function partFormHTML(data) {
   return `
     <div class="form-grid">
       <div class="form-group form-group-full">
         <label class="form-label">Nombre</label>
-        <input type="text" name="name" class="form-input" value="${data.name || ""}" required />
+        <input type="text" name="name" class="form-input" value="${data?.name || ""}" required />
       </div>
       <div class="form-group">
         <label class="form-label">Precio Unitario</label>
-        <input type="number" name="price" class="form-input" step="0.01" value="${data.price || 0}" required />
+        <input type="number" name="price" class="form-input" step="0.01" value="${data?.price || 0}" required />
       </div>
       <div class="form-group">
         <label class="form-label">Stock</label>
-        <input type="number" name="stock" class="form-input" value="${data.stock || 0}" required />
+        <input type="number" name="stock" class="form-input" value="${data?.stock || 0}" required />
       </div>
     </div>
   `;
 }
 
-function toolFormHTML(data = {}) {
+function toolFormHTML(data) {
   return `
     <div class="form-grid">
       <div class="form-group form-group-full">
         <label class="form-label">Nombre</label>
-        <input type="text" name="name" class="form-input" value="${data.name || ""}" required />
+        <input type="text" name="name" class="form-input" value="${data?.name || ""}" required />
       </div>
       <div class="form-group form-group-full">
         <label class="form-label">Descripción</label>
-        <textarea name="description" class="form-input form-textarea">${data.description || ""}</textarea>
+        <textarea name="description" class="form-input form-textarea">${data?.description || ""}</textarea>
       </div>
     </div>
   `;
@@ -294,194 +366,206 @@ function toolFormHTML(data = {}) {
 
 function setupRepairForm(form, data) {
   const repairId = data && data.id ? data.id : "new";
-  state.brokenParts[repairId] = data?.brokenParts || [];
-  state.usedParts[repairId] = data?.usedParts || [];
-  state.usedTools[repairId] = data?.usedTools || [];
-  state.additionalCosts[repairId] = data?.additionalCosts || [];
+  state._tempRepair = {
+    id: repairId,
+    brokenParts: data?.brokenParts || [],
+    usedParts: data?.usedParts || [],
+    usedTools: data?.usedTools || [],
+    additionalCosts: data?.additionalCosts || [],
+  };
 
   if (data && data.id) {
     form.querySelector('[name="total_cost"]').value = data.total_cost || 0;
   }
 
-  renderBrokenParts(repairId);
-  renderUsedParts(repairId);
-  renderUsedTools(repairId);
-  renderAdditionalCosts(repairId);
+  renderBrokenParts();
+  renderUsedParts();
+  renderUsedTools();
+  renderAdditionalCosts();
+}
 
-  form.querySelectorAll('input[name="quantity"], select[name="part_id"]').forEach((el) => {
-    el.addEventListener("change", () => calculateTotal(repairId, form));
-  });
-  form.querySelectorAll('input[name="estimated_cost"], input[name="unit_cost"], input[name="amount"]').forEach((el) => {
-    el.addEventListener("input", () => calculateTotal(repairId, form));
-  });
+function getActiveRepairId() {
+  return state._tempRepair?.id || "new";
 }
 
 window.addBrokenPart = function () {
-  const repairId = getActiveRepairId();
-  state.brokenParts[repairId].push({ name: "", note: "", estimated_cost: 0 });
-  renderBrokenParts(repairId);
+  const temp = state._tempRepair || { id: "new", brokenParts: [], usedParts: [], usedTools: [], additionalCosts: [] };
+  temp.brokenParts.push({ name: "", note: "", estimated_cost: 0 });
+  state._tempRepair = temp;
+  renderBrokenParts();
 };
 
 window.addUsedPart = function () {
-  const repairId = getActiveRepairId();
-  state.usedParts[repairId].push({ part_id: "", quantity: 1, unit_cost: 0 });
-  renderUsedParts(repairId);
+  const temp = state._tempRepair || { id: "new", brokenParts: [], usedParts: [], usedTools: [], additionalCosts: [] };
+  temp.usedParts.push({ part_id: "", quantity: 1, unit_cost: 0 });
+  state._tempRepair = temp;
+  renderUsedParts();
 };
 
 window.addUsedTool = function () {
-  const repairId = getActiveRepairId();
-  state.usedTools[repairId].push({ tool_id: "", quantity: 1 });
-  renderUsedTools(repairId);
+  const temp = state._tempRepair || { id: "new", brokenParts: [], usedParts: [], usedTools: [], additionalCosts: [] };
+  temp.usedTools.push({ tool_id: "", quantity: 1 });
+  state._tempRepair = temp;
+  renderUsedTools();
 };
 
 window.addAdditionalCost = function () {
-  const repairId = getActiveRepairId();
-  state.additionalCosts[repairId].push({ concept: "", amount: 0 });
-  renderAdditionalCosts(repairId);
+  const temp = state._tempRepair || { id: "new", brokenParts: [], usedParts: [], usedTools: [], additionalCosts: [] };
+  temp.additionalCosts.push({ concept: "", amount: 0 });
+  state._tempRepair = temp;
+  renderAdditionalCosts();
 };
 
-function getActiveRepairId() {
-  const form = document.querySelector(".modal-form[data-type='repair']");
-  return form?.dataset.id || "new";
-}
-
-function renderBrokenParts(repairId) {
+function renderBrokenParts() {
   const container = $("broken-parts-items");
-  container.innerHTML = state.brokenParts[repairId]
+  if (!container) return;
+  const items = state._tempRepair?.brokenParts || [];
+  const repairId = getActiveRepairId();
+  container.innerHTML = items
     .map(
       (item, i) => `
     <div class="list-item">
       <input type="text" class="form-input" placeholder="Parte" value="${item.name}"
-        oninput="state.brokenParts['${repairId}'][${i}].name=this.value" />
+        oninput="state._tempRepair.brokenParts[${i}].name=this.value" />
       <input type="text" class="form-input" placeholder="Nota" value="${item.note || ""}"
-        oninput="state.brokenParts['${repairId}'][${i}].note=this.value" />
+        oninput="state._tempRepair.brokenParts[${i}].note=this.value" />
       <input type="number" class="form-input" placeholder="$" value="${item.estimated_cost}" step="0.01"
-        oninput="state.brokenParts['${repairId}'][${i}].estimated_cost=parseFloat(this.value)||0; window.calculateTotal('${repairId}', document.querySelector('.modal-form'))" />
-      <button type="button" class="remove-btn" onclick="window.removeBrokenPart('${repairId}', ${i})">×</button>
+        oninput="state._tempRepair.brokenParts[${i}].estimated_cost=parseFloat(this.value)||0; window.calculateTotal()" />
+      <button type="button" class="remove-btn" onclick="window.removeBrokenPart(${i})">×</button>
     </div>
   `
     )
     .join("");
-  if (!container.innerHTML) container.innerHTML = '<p class="empty-state">No hay partes rotas agregadas.</p>';
+  if (items.length === 0) container.innerHTML = '<p class="empty-state">No hay partes rotas agregadas.</p>';
 }
 
-function renderUsedParts(repairId) {
+function renderUsedParts() {
   const container = $("used-parts-items");
-  container.innerHTML = state.usedParts[repairId]
+  if (!container) return;
+  const items = state._tempRepair?.usedParts || [];
+  container.innerHTML = items
     .map((item, i) => {
       const selectOptions = state.parts
         .map((p) => `<option value="${p.id}" data-price="${p.price}" ${p.id === item.part_id ? "selected" : ""}>${p.name} - $${p.price}</option>`)
         .join("");
+      const unitPrice = state.parts.find((p) => p.id === item.part_id)?.price || 0;
       return `
     <div class="list-item">
-      <select class="form-select" onchange="state.usedParts['${repairId}'][${i}].part_id=this.value; window.updatePartCost('${repairId}', ${i}); window.calculateTotal('${repairId}', document.querySelector('.modal-form'))">
+      <select class="form-select" onchange="state._tempRepair.usedParts[${i}].part_id=this.value; window.updatePartCost(${i}); window.calculateTotal()">
         <option value="">Seleccionar pieza</option>${selectOptions}
       </select>
       <input type="number" class="form-input" placeholder="Cant." min="1" value="${item.quantity}"
-        oninput="state.usedParts['${repairId}'][${i}].quantity=parseInt(this.value)||1; window.calculateTotal('${repairId}', document.querySelector('.modal-form'))" />
-      <span class="cost-display">$${item.quantity * (state.parts.find((p) => p.id === item.part_id)?.price || 0)}</span>
-      <button type="button" class="remove-btn" onclick="window.removeUsedPart('${repairId}', ${i})">×</button>
+        oninput="state._tempRepair.usedParts[${i}].quantity=parseInt(this.value)||1; window.calculateTotal()" />
+      <span class="cost-display">$${(item.quantity * unitPrice).toFixed(2)}</span>
+      <button type="button" class="remove-btn" onclick="window.removeUsedPart(${i})">×</button>
     </div>
   `;
     })
     .join("");
-  if (!container.innerHTML) container.innerHTML = '<p class="empty-state">No hay piezas usadas agregadas.</p>';
+  if (items.length === 0) container.innerHTML = '<p class="empty-state">No hay piezas usadas agregadas.</p>';
 }
 
-function renderUsedTools(repairId) {
+function renderUsedTools() {
   const container = $("used-tools-items");
-  container.innerHTML = state.usedTools[repairId]
+  if (!container) return;
+  const items = state._tempRepair?.usedTools || [];
+  container.innerHTML = items
     .map((item, i) => {
       const selectOptions = state.tools
         .map((t) => `<option value="${t.id}" ${t.id === item.tool_id ? "selected" : ""}>${t.name}</option>`)
         .join("");
       return `
     <div class="list-item">
-      <select class="form-select" onchange="state.usedTools['${repairId}'][${i}].tool_id=this.value">
+      <select class="form-select" onchange="state._tempRepair.usedTools[${i}].tool_id=this.value">
         <option value="">Seleccionar implemento</option>${selectOptions}
       </select>
       <input type="number" class="form-input" placeholder="Cant." min="1" value="${item.quantity}"
-        oninput="state.usedTools['${repairId}'][${i}].quantity=parseInt(this.value)||1" />
-      <button type="button" class="remove-btn" onclick="window.removeUsedTool('${repairId}', ${i})">×</button>
+        oninput="state._tempRepair.usedTools[${i}].quantity=parseInt(this.value)||1" />
+      <button type="button" class="remove-btn" onclick="window.removeUsedTool(${i})">×</button>
     </div>
   `;
     })
     .join("");
-  if (!container.innerHTML) container.innerHTML = '<p class="empty-state">No hay implementos usados agregados.</p>';
+  if (items.length === 0) container.innerHTML = '<p class="empty-state">No hay implementos usados agregados.</p>';
 }
 
-function renderAdditionalCosts(repairId) {
+function renderAdditionalCosts() {
   const container = $("additional-costs-items");
-  container.innerHTML = state.additionalCosts[repairId]
+  if (!container) return;
+  const items = state._tempRepair?.additionalCosts || [];
+  container.innerHTML = items
     .map(
       (item, i) => `
     <div class="list-item">
       <input type="text" class="form-input" placeholder="Concepto" value="${item.concept}"
-        oninput="state.additionalCosts['${repairId}'][${i}].concept=this.value" />
+        oninput="state._tempRepair.additionalCosts[${i}].concept=this.value" />
       <input type="number" class="form-input" placeholder="$" min="0" step="0.01" value="${item.amount}"
-        oninput="state.additionalCosts['${repairId}'][${i}].amount=parseFloat(this.value)||0; window.calculateTotal('${repairId}', document.querySelector('.modal-form'))" />
-      <button type="button" class="remove-btn" onclick="window.removeAdditionalCost('${repairId}', ${i})">×</button>
+        oninput="state._tempRepair.additionalCosts[${i}].amount=parseFloat(this.value)||0; window.calculateTotal()" />
+      <button type="button" class="remove-btn" onclick="window.removeAdditionalCost(${i})">×</button>
     </div>
   `
     )
     .join("");
-  if (!container.innerHTML) container.innerHTML = '<p class="empty-state">No hay costos adicionales agregados.</p>';
+  if (items.length === 0) container.innerHTML = '<p class="empty-state">No hay costos adicionales agregados.</p>';
 }
 
-window.removeBrokenPart = function (repairId, index) {
-  state.brokenParts[repairId].splice(index, 1);
-  renderBrokenParts(repairId);
-  calculateTotal(repairId);
+window.removeBrokenPart = function (index) {
+  if (!state._tempRepair) return;
+  state._tempRepair.brokenParts.splice(index, 1);
+  renderBrokenParts();
+  calculateTotal();
 };
 
-window.removeUsedPart = function (repairId, index) {
-  state.usedParts[repairId].splice(index, 1);
-  renderUsedParts(repairId);
-  calculateTotal(repairId);
+window.removeUsedPart = function (index) {
+  if (!state._tempRepair) return;
+  state._tempRepair.usedParts.splice(index, 1);
+  renderUsedParts();
+  calculateTotal();
 };
 
-window.removeUsedTool = function (repairId, index) {
-  state.usedTools[repairId].splice(index, 1);
-  renderUsedTools(repairId);
+window.removeUsedTool = function (index) {
+  if (!state._tempRepair) return;
+  state._tempRepair.usedTools.splice(index, 1);
+  renderUsedTools();
 };
 
-window.removeAdditionalCost = function (repairId, index) {
-  state.additionalCosts[repairId].splice(index, 1);
-  renderAdditionalCosts(repairId);
-  calculateTotal(repairId);
+window.removeAdditionalCost = function (index) {
+  if (!state._tempRepair) return;
+  state._tempRepair.additionalCosts.splice(index, 1);
+  renderAdditionalCosts();
+  calculateTotal();
 };
 
-window.updatePartCost = function (repairId, index) {
-  const items = state.usedParts[repairId];
-  if (items[index]) {
-    const part = state.parts.find((p) => p.id === items[index].part_id);
-    if (part) items[index].unit_cost = part.price;
-  }
-  renderUsedParts(repairId);
-  calculateTotal(repairId);
+window.updatePartCost = function (index) {
+  if (!state._tempRepair?.usedParts[index]) return;
+  const part = state.parts.find((p) => p.id === state._tempRepair.usedParts[index].part_id);
+  if (part) state._tempRepair.usedParts[index].unit_cost = part.price;
+  renderUsedParts();
+  calculateTotal();
 };
 
-window.calculateTotal = function (repairId, form) {
-  if (!form) form = document.querySelector(".modal-form");
-  const f = form || {};
+window.calculateTotal = function () {
+  const form = document.querySelector(".modal-form");
+  if (!form) return;
+  const totalInput = form.querySelector('[name="total_cost"]');
+  if (!totalInput) return;
 
   let total = 0;
 
-  (state.brokenParts[repairId] || []).forEach((item) => {
+  (state._tempRepair?.brokenParts || []).forEach((item) => {
     total += parseFloat(item.estimated_cost) || 0;
   });
 
-  (state.usedParts[repairId] || []).forEach((item) => {
+  (state._tempRepair?.usedParts || []).forEach((item) => {
     const part = state.parts.find((p) => p.id === item.part_id);
     if (part) total += (parseFloat(item.quantity) || 0) * parseFloat(part.price);
   });
 
-  (state.additionalCosts[repairId] || []).forEach((item) => {
+  (state._tempRepair?.additionalCosts || []).forEach((item) => {
     total += parseFloat(item.amount) || 0;
   });
 
-  const totalInput = f.querySelector('[name="total_cost"]');
-  if (totalInput) totalInput.value = total.toFixed(2);
+  totalInput.value = total.toFixed(2);
 };
 
 /* ===== Form Submission ===== */
@@ -508,7 +592,8 @@ function handleFormSubmit(type, form, data) {
       break;
   }
   closeModal();
-  renderAll();
+  saveState();
+  renderPage(currentPage);
 }
 
 function handleClientSubmit(values, data) {
@@ -516,8 +601,7 @@ function handleClientSubmit(values, data) {
     Object.assign(data, { ...values, id: data.id });
     state.clients = state.clients.map((c) => (c.id === data.id ? data : c));
   } else {
-    const client = { ...values, id: Date.now().toString() };
-    state.clients.push(client);
+    state.clients.push({ ...values, id: Date.now().toString() });
   }
 }
 
@@ -526,8 +610,7 @@ function handleDeviceSubmit(values, data) {
     Object.assign(data, { ...values, id: data.id });
     state.devices = state.devices.map((d) => (d.id === data.id ? data : d));
   } else {
-    const device = { ...values, id: Date.now().toString() };
-    state.devices.push(device);
+    state.devices.push({ ...values, id: Date.now().toString() });
   }
 }
 
@@ -536,24 +619,20 @@ function handleRepairSubmit(values, form, data) {
   values.total_cost = parseFloat(totalInput?.value || 0);
   values.created_at = new Date().toISOString();
 
-  const tempId = getActiveRepairId();
-  values.brokenParts = state.brokenParts[tempId] || [];
-  values.usedParts = state.usedParts[tempId] || [];
-  values.usedTools = state.usedTools[tempId] || [];
-  values.additionalCosts = state.additionalCosts[tempId] || [];
+  const temp = state._tempRepair;
+  values.brokenParts = temp?.brokenParts || [];
+  values.usedParts = temp?.usedParts || [];
+  values.usedTools = temp?.usedTools || [];
+  values.additionalCosts = temp?.additionalCosts || [];
 
   if (data && data.id) {
     Object.assign(data, { ...values, id: data.id });
     state.repairs = state.repairs.map((r) => (r.id === data.id ? data : r));
   } else {
-    const repair = { ...values, id: Date.now().toString() };
-    state.repairs.push(repair);
+    state.repairs.push({ ...values, id: Date.now().toString() });
   }
 
-  delete state.brokenParts[tempId];
-  delete state.usedParts[tempId];
-  delete state.usedTools[tempId];
-  delete state.additionalCosts[tempId];
+  state._tempRepair = null;
 }
 
 function handlePartSubmit(values, data) {
@@ -561,8 +640,7 @@ function handlePartSubmit(values, data) {
     Object.assign(data, { ...values, id: data.id });
     state.parts = state.parts.map((p) => (p.id === data.id ? data : p));
   } else {
-    const part = { ...values, id: Date.now().toString(), price: parseFloat(values.price) };
-    state.parts.push(part);
+    state.parts.push({ ...values, id: Date.now().toString(), price: parseFloat(values.price) });
   }
 }
 
@@ -571,20 +649,33 @@ function handleToolSubmit(values, data) {
     Object.assign(data, { ...values, id: data.id });
     state.tools = state.tools.map((t) => (t.id === data.id ? data : t));
   } else {
-    const tool = { ...values, id: Date.now().toString() };
-    state.tools.push(tool);
+    state.tools.push({ ...values, id: Date.now().toString() });
   }
 }
 
-/* ===== Render Functions ===== */
+/* ===== Render Functions Per Page ===== */
 
-function renderAll() {
-  renderDashboard();
-  renderClients();
-  renderDevices();
-  renderRepairs();
-  renderParts();
-  renderTools();
+function renderPage(page) {
+  switch (page) {
+    case "dashboard":
+      renderDashboard();
+      break;
+    case "clients":
+      renderClients();
+      break;
+    case "devices":
+      renderDevices();
+      break;
+    case "repairs":
+      renderRepairs();
+      break;
+    case "parts":
+      renderParts();
+      break;
+    case "tools":
+      renderTools();
+      break;
+  }
 }
 
 function renderDashboard() {
@@ -596,7 +687,9 @@ function renderDashboard() {
     .filter((r) => r.status === "completed")
     .reduce((sum, r) => sum + (parseFloat(r.total_cost) || 0), 0);
 
-  $("stats-grid").innerHTML = `
+  const statsGrid = $("stats-grid");
+  if (!statsGrid) return;
+  statsGrid.innerHTML = `
     <div class="stat-card primary" style="position: relative;">
       <div class="stat-label">Total Reparaciones</div>
       <div class="stat-value">${totalRepairs}</div>
@@ -625,24 +718,28 @@ function renderDashboard() {
   `;
 
   const recentRepairs = state.repairs.slice().reverse().slice(0, 5);
+  const rr = $("recent-repairs");
+  if (!rr) return;
   if (recentRepairs.length === 0) {
-    $("recent-repairs").innerHTML = '<p class="empty-state">No hay reparaciones registradas aún.</p>';
-    return;
+    rr.innerHTML = '<p class="empty-state">No hay reparaciones registradas aún.</p>';
+  } else {
+    rr.innerHTML = `
+      <div class="section-title">Reparaciones Recientes</div>
+      <div class="table-wrapper">
+        <table>
+          <thead><tr><th>Dispositivo</th><th>Cliente</th><th>Diagnóstico</th><th>Estatus</th><th>Total</th></tr></thead>
+          <tbody>${recentRepairs.map((r) => repairRow(r)).join("")}</tbody>
+        </table>
+      </div>
+    `;
   }
-  $("recent-repairs").innerHTML = `
-    <div class="section-title">Reparaciones Recientes</div>
-    <div class="table-wrapper">
-      <table>
-        <thead><tr><th>Dispositivo</th><th>Cliente</th><th>Diagnóstico</th><th>Estatus</th><th>Total</th></tr></thead>
-        <tbody>${recentRepairs.map((r) => repairRow(r)).join("")}</tbody>
-      </table>
-    </div>
-  `;
 }
 
 function renderClients() {
+  const el = $("clients-table");
+  if (!el) return;
   if (state.clients.length === 0) {
-    $("clients-table").innerHTML = `
+    el.innerHTML = `
       <div class="empty-state">
         <div class="empty-icon">👥</div>
         <p>No hay clientes registrados. ¡Comienza agregando uno!</p>
@@ -650,7 +747,7 @@ function renderClients() {
     `;
     return;
   }
-  $("clients-table").innerHTML = `
+  el.innerHTML = `
     <table>
       <thead><tr><th>Nombre</th><th>Teléfono</th><th>Email</th><th>Acciones</th></tr></thead>
       <tbody>
@@ -659,9 +756,7 @@ function renderClients() {
             <td>${c.name}</td>
             <td>${c.phone}</td>
             <td>${c.email || "-"}</td>
-            <td>
-              <button class="btn btn-sm btn-outline" onclick="window.editItem('client', '${c.id}')">Editar</button>
-            </td>
+            <td><button class="btn btn-sm btn-outline" onclick="window.editItem('client', '${c.id}')">Editar</button></td>
           </tr>
         `).join("")}
       </tbody>
@@ -670,8 +765,10 @@ function renderClients() {
 }
 
 function renderDevices() {
+  const el = $("devices-table");
+  if (!el) return;
   if (state.devices.length === 0) {
-    $("devices-table").innerHTML = `
+    el.innerHTML = `
       <div class="empty-state">
         <div class="empty-icon">📱</div>
         <p>No hay dispositivos registrados.</p>
@@ -679,7 +776,7 @@ function renderDevices() {
     `;
     return;
   }
-  $("devices-table").innerHTML = `
+  el.innerHTML = `
     <table>
       <thead><tr><th>Cliente</th><th>Marca</th><th>Modelo</th><th>IMEI</th><th>Color</th><th>Acciones</th></tr></thead>
       <tbody>
@@ -702,8 +799,10 @@ function renderDevices() {
 }
 
 function renderRepairs() {
+  const el = $("repairs-table");
+  if (!el) return;
   if (state.repairs.length === 0) {
-    $("repairs-table").innerHTML = `
+    el.innerHTML = `
       <div class="empty-state">
         <div class="empty-icon">🔧</div>
         <p>No hay reparaciones registradas.</p>
@@ -711,7 +810,7 @@ function renderRepairs() {
     `;
     return;
   }
-  $("repairs-table").innerHTML = `
+  el.innerHTML = `
     <table>
       <thead><tr><th>Dispositivo</th><th>Cliente</th><th>Diagnóstico</th><th>Estatus</th><th>Total</th><th>Acciones</th></tr></thead>
       <tbody>${state.repairs.map((r) => repairRow(r, true)).join("")}</tbody>
@@ -720,8 +819,10 @@ function renderRepairs() {
 }
 
 function renderParts() {
+  const el = $("parts-table");
+  if (!el) return;
   if (state.parts.length === 0) {
-    $("parts-table").innerHTML = `
+    el.innerHTML = `
       <div class="empty-state">
         <div class="empty-icon">🧩</div>
         <p>No hay piezas en inventario.</p>
@@ -729,7 +830,7 @@ function renderParts() {
     `;
     return;
   }
-  $("parts-table").innerHTML = `
+  el.innerHTML = `
     <table>
       <thead><tr><th>Nombre</th><th>Precio</th><th>Stock</th><th>Acciones</th></tr></thead>
       <tbody>${state.parts.map((p) => `
@@ -745,8 +846,10 @@ function renderParts() {
 }
 
 function renderTools() {
+  const el = $("tools-table");
+  if (!el) return;
   if (state.tools.length === 0) {
-    $("tools-table").innerHTML = `
+    el.innerHTML = `
       <div class="empty-state">
         <div class="empty-icon">🛠️</div>
         <p>No hay implementos en inventario.</p>
@@ -754,7 +857,7 @@ function renderTools() {
     `;
     return;
   }
-  $("tools-table").innerHTML = `
+  el.innerHTML = `
     <table>
       <thead><tr><th>Nombre</th><th>Descripción</th><th>Acciones</th></tr></thead>
       <tbody>${state.tools.map((t) => `
@@ -803,7 +906,7 @@ function formatStatus(s) {
   return map[s] || s;
 }
 
-/* ===== Edit / Delete ===== */
+/* ===== Edit ===== */
 
 window.editItem = function (type, id) {
   const collection = {
@@ -813,30 +916,22 @@ window.editItem = function (type, id) {
     tool: state.tools,
     repair: state.repairs,
   };
-  const item = collection[type]?.find((i) => i.id === id);
-  if (item) openModal(type, item);
+  const found = collection[type]?.find((i) => i.id === id);
+  if (found) openModal(type, found);
 };
 
-/* ===== Sample Data (dev only) ===== */
+/* ===== State Persistence ===== */
 
 function seedSampleData() {
-  if (state.clients.length === 0) {
+  if (state.clients.length === 0 && state.devices.length === 0) {
     state.clients.push({ id: "c1", name: "Juan Pérez", phone: "555-1234", email: "juan@email.com" });
     state.clients.push({ id: "c2", name: "María García", phone: "555-5678", email: "maria@email.com" });
-  }
-  if (state.devices.length === 0) {
     state.devices.push({ id: "d1", client_id: "c1", brand: "iPhone", model: "14 Pro", imei: "123456789012345", color: "Negro" });
     state.devices.push({ id: "d2", client_id: "c2", brand: "Samsung", model: "S23", imei: "987654321098765", color: "Blanco" });
-  }
-  if (state.parts.length === 0) {
     state.parts.push({ id: "p1", name: "Pantalla iPhone 14 Pro", price: 250.0, stock: 5 });
     state.parts.push({ id: "p2", name: "Batería Samsung S23", price: 80.0, stock: 10 });
-  }
-  if (state.tools.length === 0) {
     state.tools.push({ id: "t1", name: "Destornillador de precisión", description: "Juego de 10 piezas" });
     state.tools.push({ id: "t2", name: "Alicate de presión", description: "Para retirar componentes" });
-  }
-  if (state.repairs.length === 0) {
     state.repairs.push({
       id: "r1",
       device_id: "d1",
@@ -847,12 +942,41 @@ function seedSampleData() {
       created_at: new Date().toISOString(),
       completed_at: new Date().toISOString(),
     });
+    saveState();
   }
-  renderAll();
 }
 
-/* ===== Init ===== */
+function saveState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      clients: state.clients,
+      devices: state.devices,
+      repairs: state.repairs,
+      parts: state.parts,
+      tools: state.tools,
+    }));
+  } catch (e) {
+    console.warn("No se pudo guardar el estado:", e.message);
+  }
+}
+
+function loadState() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      state.clients = parsed.clients || [];
+      state.devices = parsed.devices || [];
+      state.repairs = parsed.repairs || [];
+      state.parts = parsed.parts || [];
+      state.tools = parsed.tools || [];
+    }
+  } catch (e) {
+    console.warn("No se pudo cargar el estado:", e.message);
+  }
+}
 
 window.closeModal = closeModal;
+window.calculateTotal = calculateTotal;
 
 document.addEventListener("DOMContentLoaded", init);
